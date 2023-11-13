@@ -1,0 +1,122 @@
+https://bugzilla.mozilla.org/show_bug.cgi?id=1274732
+
+diff -Naur a/mfbt/UniquePtrExtensions.h b/mfbt/UniquePtrExtensions.h
+--- a/mfbt/UniquePtrExtensions.h	1970-01-01 00:00:00.000000000 +0000
++++ b/mfbt/UniquePtrExtensions.h	2018-03-14 19:14:00.525642017 +0000
+@@ -0,0 +1,57 @@
++/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++/* Useful extensions to UniquePtr. */
++
++#ifndef mozilla_UniquePtrExtensions_h
++#define mozilla_UniquePtrExtensions_h
++
++#include "mozilla/fallible.h"
++#include "mozilla/UniquePtr.h"
++
++namespace mozilla {
++
++/**
++ * MakeUniqueFallible works exactly like MakeUnique, except that the memory
++ * allocation performed is done fallibly, i.e. it can return nullptr.
++ */
++template<typename T, typename... Args>
++typename detail::UniqueSelector<T>::SingleObject
++MakeUniqueFallible(Args&&... aArgs)
++{
++  return UniquePtr<T>(new (fallible) T(Forward<Args>(aArgs)...));
++}
++
++template<typename T>
++typename detail::UniqueSelector<T>::UnknownBound
++MakeUniqueFallible(decltype(sizeof(int)) aN)
++{
++  typedef typename RemoveExtent<T>::Type ArrayType;
++  return UniquePtr<T>(new (fallible) ArrayType[aN]());
++}
++
++template<typename T, typename... Args>
++typename detail::UniqueSelector<T>::KnownBound
++MakeUniqueFallible(Args&&... aArgs) = delete;
++
++namespace detail {
++
++template<typename T>
++struct FreePolicy
++{
++  void operator()(const void* ptr) {
++    free(const_cast<void*>(ptr));
++  }
++};
++
++} // namespace detail
++
++template<typename T>
++using UniqueFreePtr = UniquePtr<T, detail::FreePolicy<T>>;
++
++} // namespace mozilla
++
++#endif // mozilla_UniquePtrExtensions_h
+diff -Naur a/mfbt/moz.build b/mfbt/moz.build
+--- a/mfbt/moz.build	2018-03-04 19:19:00.000000000 +0000
++++ b/mfbt/moz.build	2018-03-12 23:56:29.268491124 +0000
+@@ -78,6 +78,7 @@
+     'Types.h',
+     'TypeTraits.h',
+     'UniquePtr.h',
++    'UniquePtrExtensions.h',
+     'Vector.h',
+     'WeakPtr.h',
+     'unused.h',
+--- a/netwerk/streamconv/converters/nsHTTPCompressConv.cpp	2018-03-04 19:19:00.000000000 +0000
++++ b/netwerk/streamconv/converters/nsHTTPCompressConv.cpp	2018-03-13 02:48:33.582271050 +0000
+@@ -15,6 +15,7 @@
+ #include "nsThreadUtils.h"
+ #include "mozilla/Preferences.h"
+ #include "nsIForcePendingChannel.h"
++#include "mozilla/UniquePtrExtensions.h"
+ 
+ // brotli headers
+ #include "state.h"
+@@ -143,9 +144,8 @@
+   nsHTTPCompressConv *self = static_cast<nsHTTPCompressConv *>(closure);
+   *countRead = 0;
+ 
+-  const uint32_t kOutSize = 128 * 1024; // just a chunk size, we call in a loop
+-  unsigned char outBuffer[kOutSize];
+-  unsigned char *outPtr;
++  const size_t kOutSize = 128 * 1024; // just a chunk size, we call in a loop
++  uint8_t *outPtr;
+   size_t outSize;
+   size_t avail = aAvail;
+   BrotliResult res;
+@@ -155,6 +155,7 @@
+     return NS_OK;
+   }
+ 
++  auto outBuffer = MakeUniqueFallible<uint8_t[]>(kOutSize);
+   if (outBuffer == nullptr) {
+     self->mBrotli->mStatus = NS_ERROR_OUT_OF_MEMORY;
+     return self->mBrotli->mStatus;
+@@ -162,7 +163,7 @@
+ 
+   do {
+     outSize = kOutSize;
+-    outPtr = outBuffer;
++    outPtr = outBuffer.get();
+ 
+     // brotli api is documented in brotli/dec/decode.h and brotli/dec/decode.c
+ 
+@@ -189,7 +190,7 @@
+       nsresult rv = self->do_OnDataAvailable(self->mBrotli->mRequest,
+                                              self->mBrotli->mContext,
+                                              self->mBrotli->mSourceOffset,
+-                                             reinterpret_cast<const char *>(outBuffer),
++                                             reinterpret_cast<const char *>(outBuffer.get()),
+                                              outSize);
+       if (NS_FAILED(rv)) {
+         self->mBrotli->mStatus = rv;

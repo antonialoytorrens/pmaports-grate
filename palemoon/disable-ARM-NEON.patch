@@ -1,0 +1,34 @@
+--- a/build/autoconf/arch.m4	2023-11-10 13:40:49.888696005 +0100
++++ b/build/autoconf/arch.m4	2023-11-10 13:55:09.336728429 +0100
+@@ -218,29 +218,8 @@
+   dnl Determine the target ARM architecture (5 for ARMv5, v5T, v5E, etc.; 6 for ARMv6, v6K, etc.)
+   ARM_ARCH=`${CC-cc} ${CFLAGS} -dM -E - < /dev/null | sed -n 's/.*__ARM_ARCH_\([[0-9]][[0-9]]*\).*/\1/p'`
+   AC_MSG_RESULT("$ARM_ARCH")
+-
+-  AC_MSG_CHECKING(for ARM NEON support in compiler)
+-  # We try to link so that this also fails when
+-  # building with LTO.
+-  AC_TRY_LINK([],
+-                 [asm(".fpu neon\n vadd.i8 d0, d0, d0");],
+-                 result="yes", result="no")
+-  AC_MSG_RESULT("$result")
+-  if test "$result" = "yes"; then
+-      AC_DEFINE(HAVE_ARM_NEON)
+-      HAVE_ARM_NEON=1
+-
+-      dnl We don't need to build NEON support if we're targetting a non-NEON device.
+-      dnl This matches media/webrtc/trunk/webrtc/build/common.gypi.
+-      if test -n "$ARM_ARCH"; then
+-          if test "$ARM_ARCH" -lt 7; then
+-              BUILD_ARM_NEON=
+-          else
+-              AC_DEFINE(BUILD_ARM_NEON)
+-              BUILD_ARM_NEON=1
+-          fi
+-      fi
+-  fi
++  HAVE_ARM_NEON=
++  BUILD_ARM_NEON=
+ 
+ fi # CPU_ARCH = arm
+

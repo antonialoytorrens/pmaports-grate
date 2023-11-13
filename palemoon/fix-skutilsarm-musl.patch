@@ -1,0 +1,97 @@
+--- a/gfx/skia/trunk/src/core/SkUtilsArm.cpp
++++ b/gfx/skia/trunk/src/core/SkUtilsArm.cpp
+@@ -108,71 +108,64 @@
+     result = false;
+ 
+     do {
+-        // open /proc/cpuinfo
+-        int fd = TEMP_FAILURE_RETRY(open("/proc/cpuinfo", O_RDONLY));
++        // open /proc/cpuinfo, handling EINTR manually
++        int fd;
++        do {
++            fd = open("/proc/cpuinfo", O_RDONLY);
++        } while (fd == -1 && errno == EINTR);
++
+         if (fd < 0) {
+             SkDebugf("Could not open /proc/cpuinfo: %s\n", strerror(errno));
+             break;
+         }
+ 
+-        // Read the file. To simplify our search, we're going to place two
+-        // sentinel '\n' characters: one at the start of the buffer, and one at
+-        // the end. This means we reserve the first and last buffer bytes.
+         buffer[0] = '\n';
+-        int size = TEMP_FAILURE_RETRY(read(fd, buffer+1, sizeof(buffer)-2));
++        ssize_t size;
++        do {
++            size = read(fd, buffer+1, sizeof(buffer)-2);
++        } while (size == -1 && errno == EINTR);
+         close(fd);
+ 
+-        if (size < 0) {  // should not happen
++        if (size < 0) {
+             SkDebugf("Could not read /proc/cpuinfo: %s\n", strerror(errno));
+             break;
+         }
+ 
+-        SkDebugf("START /proc/cpuinfo:\n%.*s\nEND /proc/cpuinfo\n",
+-                 size, buffer+1);
++        SkDebugf("START /proc/cpuinfo:\n%.*s\nEND /proc/cpuinfo\n", size, buffer+1);
+ 
+-        // Compute buffer limit, and place final sentinel
+         char* buffer_end = buffer + 1 + size;
+         buffer_end[0] = '\n';
+ 
+-        // Now, find a line that starts with "Features", i.e. look for
+-        // '\nFeatures ' in our buffer.
+         const char features[] = "\nFeatures\t";
+         const size_t features_len = sizeof(features)-1;
+ 
+-        char*  line = (char*) memmem(buffer, buffer_end - buffer,
+-                                     features, features_len);
+-        if (line == NULL) {  // Weird, no Features line, bad kernel?
+-            SkDebugf("Could not find a line starting with 'Features'"
+-              "in /proc/cpuinfo ?\n");
++        char* line = (char*) memmem(buffer, buffer_end - buffer, features, features_len);
++        if (line == nullptr) {
++            SkDebugf("Could not find a line starting with 'Features' in /proc/cpuinfo ?\n");
+             break;
+         }
+ 
+-        line += features_len;  // Skip the "\nFeatures\t" prefix
++        line += features_len;
+ 
+-        // Find the end of the current line
+         char* line_end = (char*) memchr(line, '\n', buffer_end - line);
+-        if (line_end == NULL)
++        if (line_end == nullptr) {
+             line_end = buffer_end;
++        }
+ 
+-        // Now find an instance of 'neon' in the flags list. We want to
+-        // ensure it's only 'neon' and not something fancy like 'noneon'
+-        // so check that it follows a space.
+         const char neon[] = " neon";
+         const size_t neon_len = sizeof(neon)-1;
+-        const char* flag = (const char*) memmem(line, line_end - line,
+-                                                neon, neon_len);
+-        if (flag == NULL)
++        const char* flag = (const char*) memmem(line, line_end - line, neon, neon_len);
++        if (flag == nullptr) {
+             break;
++        }
+ 
+-        // Ensure it is followed by a space or a newline.
+-        if (flag[neon_len] != ' ' && flag[neon_len] != '\n')
++        if (flag[neon_len] != ' ' && flag[neon_len] != '\n') {
+             break;
++        }
+ 
+-        // Fine, we support Arm NEON !
+         result = true;
+ 
+     } while (0);
+-
+ #endif  // USE_ANDROID_NDK_CPU_FEATURES
+ 
+     if (result) {

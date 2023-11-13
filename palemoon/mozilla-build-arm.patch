@@ -1,0 +1,11 @@
+--- a/gfx/ycbcr/moz.build	2018-03-04 19:19:00.000000000 +0000
++++ b/gfx/ycbcr/moz.build	2018-03-14 22:18:18.982787034 +0000
+@@ -55,7 +55,7 @@
+         'yuv_row_other.cpp',
+     ]
+ 
+-if CONFIG['CPU_ARCH'] == 'arm' and CONFIG['HAVE_ARM_NEON']:
++if CONFIG['HAVE_ARM_NEON']:
+     SOURCES += [
+         'yuv_row_arm.s',
+     ]

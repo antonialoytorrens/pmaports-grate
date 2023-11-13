@@ -1,0 +1,72 @@
+--- a/xpcom/io/nsLocalFileUnix.cpp	2018-03-04 19:19:00.000000000 +0000
++++ b/xpcom/io/nsLocalFileUnix.cpp	2018-03-12 05:42:41.887653051 +0000
+@@ -77,6 +77,10 @@
+ #include "nsTraceRefcnt.h"
+ #include "nsHashKeys.h"
+ 
++#ifndef BLOCK_SIZE
++#define BLOCK_SIZE 1024 /* kernel block size */
++#endif
++
+ using namespace mozilla;
+ 
+ #define ENSURE_STAT_CACHE()                     \
+--- a/toolkit/xre/nsSigHandlers.cpp	2018-03-04 19:19:00.000000000 +0000
++++ b/toolkit/xre/nsSigHandlers.cpp	2018-03-10 01:56:21.414240525 +0000
+@@ -14,6 +14,7 @@
+ 
+ #include <signal.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include <string.h>
+ #include "prthread.h"
+ #include "plstr.h"
+@@ -37,6 +38,9 @@
+ #include <ucontext.h>
+ #endif
+ 
++typedef uint16_t __uint16_t;
++typedef uint32_t __uint32_t;
++
+ static char _progname[1024] = "huh?";
+ static unsigned int _gdb_sleep_duration = 300;
+ 
+--- a/js/src/vm/PosixNSPR.cpp	2018-03-04 19:19:00.000000000 +0000
++++ b/js/src/vm/PosixNSPR.cpp	2018-03-15 00:18:56.733100111 +0000
+@@ -155,8 +155,10 @@
+     result = 0;
+ #elif defined(__NetBSD__)
+     result = pthread_setname_np(pthread_self(), "%s", (void*)name);
+-#else
++#elif defined(__GLIBC__)
+     result = pthread_setname_np(pthread_self(), name);
++#else
++  result = 0;
+ #endif
+     if (result)
+         return PR_FAILURE;
+--- a/security/sandbox/chromium/sandbox/linux/seccomp-bpf/trap.cc.orig	2015-09-23 09:10:08.812740571 +0200
++++ b/security/sandbox/chromium/sandbox/linux/seccomp-bpf/trap.cc	2015-09-23 09:11:38.404746155 +0200
+@@ -23,6 +23,11 @@
+ #include "sandbox/linux/services/android_ucontext.h"
+ #endif
+ 
++// musl libc defines siginfo_t __si_fields instead of _sifields
++#if defined(OS_LINUX) && !defined(__GLIBC__)
++#define _sifields __si_fields
++#endif
++
+ namespace {
+ 
+ struct arch_sigsys {
+--- a/ipc/chromium/src/third_party/libevent/arc4random.c
++++ b/ipc/chromium/src/third_party/libevent/arc4random.c
+@@ -59,7 +59,7 @@
+ #include <sys/param.h>
+ #include <sys/time.h>
+ #ifdef _EVENT_HAVE_SYS_SYSCTL_H
+-#include <sys/sysctl.h>
++#include <linux/sysctl.h>
+ #endif
+ #endif
+ #include <limits.h>

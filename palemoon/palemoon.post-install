@@ -1,0 +1,13 @@
+#!/bin/sh
+
+echo "*" >&2
+echo "* If you experience slow rendering and scrolling problems:" >&2
+echo "*     1) Turn on 'Use hardware acceleration when available' option at 'Tools -> Preferences -> Advanced' menu" >&2
+echo "*     2) Check out 'GPU Accelerated Windows' at 'Graphics' section at 'Help -> Troubleshooting Information' menu" >&2
+echo "*     If you're NOT seeing 'OpenGL (OMTC)' on this section;" >&2
+echo "*      a) Type "about:config" at address bar and tune these settings:" >&2
+echo "*         layers.acceleration.force-enabled : true" >&2
+echo "*      b) Set "MOZ_USE_OMTC=1" (export MOZ_USE_OMTC=1) before launching Pale Moon" >&2
+echo "*" >&2
+
+exit 0

@@ -1,0 +1,130 @@
+# Contributor: Taner Tas <taner76@gmail.com>
+# Maintainer: Taner Tas <taner76@gmail.com>
+# https://github.com/tanertas/aports (see palemoon tree)
+pkgname=palemoon
+pkgver=27.9.4
+pkgrel=0
+pkgdesc="Goanna-based web browser focusing on efficiency and customization"
+url="https://www.palemoon.org"
+arch="all" # May not build on all platforms
+license="MPL-2.0"
+depends=""
+makedepends="unzip zip coreutils python2 yasm autoconf2.13 alsa-lib-dev
+	gtk+2.0-dev dbus-glib-dev libxt-dev startup-notification-dev
+	linux-headers fts-dev bsd-compat-headers nspr-dev nss-dev
+	libjpeg-turbo-dev libevent-dev libvpx-dev icu-dev libwebp-dev
+	sqlite-dev hunspell-dev g++6 gcc6
+	"
+install="$pkgname.post-install"
+source="$pkgname-$pkgver.tar.gz
+	mozconfig
+	bugzilla-1274732.patch
+	disable-hunspell_hooks.patch
+	fix-fortify-system-wrappers.patch
+	fix-arm-atomics-grsec.patch
+	fix-arm-version-detect.patch
+	mozalloc-cstdlib.patch
+	mozilla-build-arm.patch
+	musl-basic.patch
+	fix-lcrmf.patch
+	x86-musl-fix.patch
+	rhbz-966424.patch
+
+	fix-null-in-coded-stream.patch
+	fix-skutilsarm-musl.patch
+	disable-ARM-NEON.patch
+	"
+builddir="$srcdir/Pale-Moon-${pkgver}_Release"
+_pmappdir=/usr/lib/$pkgname-$pkgver
+options="!check" # No test suite
+
+prepare() {
+	cd "$builddir"
+	cp "$srcdir/mozconfig" .mozconfig
+	echo mk_add_options MOZ_OBJDIR="$builddir"/pmbuild >> .mozconfig
+
+	# Disable precompile startup cache
+	case $CARCH in
+	aarch64) echo ac_add_options --disable-precompiled-startupcache >> .mozconfig ;;
+	armv7) echo ac_add_options --disable-precompiled-startupcache >> .mozconfig ;;
+	armhf) echo ac_add_options --disable-precompiled-startupcache >> .mozconfig ;;
+	*) ;;
+	esac
+
+	# Disable NEON
+	case $CARCH in
+	armv7)
+		echo ac_add_options --disable-png-arm-neon-support >> .mozconfig
+		;;
+	*) ;;
+	esac
+
+	default_prepare
+}
+
+build() {
+	cd "$builddir"
+	export CC="gcc-6"
+	export CXX="g++-6"
+	export CFLAGS="$CFLAGS -fno-delete-null-pointer-checks -fno-schedule-insns2" # Got from Alpine Firefox build
+	export CXXFLAGS="$CFLAGS"
+
+	case $CARCH in
+	x86_64) export _OPTIMIZE="-O2" ;;
+	x86) export _OPTIMIZE="-O2 -msse2 -mfpmath=sse" ;;
+	*) export _OPTIMIZE="-O0" ;;
+	esac
+
+	# Disable NEON
+	# Target ARM Cortex-A9 CPUs, which also support the VFPv3-D16 floating-point unit
+	# Compile for Tegra 2
+	case $CARCH in
+	armv7)
+		export CFLAGS="$CFLAGS -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard"
+		export CXXFLAGS="$CXXFLAGS -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard"
+		;;
+	*) ;;
+	esac
+
+	export LDFLAGS="$LDFLAGS -Wl,-rpath,${_pmappdir}"
+	export LIBS="$LIBS -lfts"
+	export SHELL=/bin/sh
+	export MOZ_MAKE_FLAGS="$MAKEOPTS"
+	./mach build
+}
+
+package() {
+	cd "$builddir"
+	DESTDIR="$pkgdir" ./mach install
+	rm -rf "$pkgdir"/usr/include
+	rm -rf "$pkgdir"/usr/lib/$pkgname-devel-$pkgver
+	rm -rf "$pkgdir"/usr/share/idl
+	mkdir -p "$pkgdir"/usr/share/icons/hicolor/16x16/apps \
+	"$pkgdir"/usr/share/icons/hicolor/32x32/apps \
+	"$pkgdir"/usr/share/icons/hicolor/48x48/apps \
+	"$pkgdir"/usr/share/icons/hicolor/128x128/apps
+	install -Dm644 "$builddir"/browser/branding/official/palemoon.desktop "$pkgdir"/usr/share/applications/palemoon.desktop
+	ln -s /usr/lib/$pkgname-$pkgver/browser/chrome/icons/default/default16.png "$pkgdir/usr/share/icons/hicolor/16x16/apps/palemoon.png"
+	ln -s /usr/lib/$pkgname-$pkgver/browser/chrome/icons/default/default32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/palemoon.png"
+	ln -s /usr/lib/$pkgname-$pkgver/browser/chrome/icons/default/default48.png "$pkgdir/usr/share/icons/hicolor/48x48/apps/palemoon.png"
+	ln -s /usr/lib/$pkgname-$pkgver/browser/icons/mozicon128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/palemoon.png"
+	rm -f "$pkgdir"/usr/lib/$pkgname-$pkgver/palemoon-bin
+}
+sha512sums="
+d252b0e3dba798ea3c2303e549d7e30f4a5ada3ddde8b49f2b38cc244990e76d7832f453baab8ff7ab62616d468aee6651b0632faff3c2f4adcc52499a89e9d8  palemoon-27.9.4.tar.gz
+6d69f342a1813e662ee7087ea5612a51bd48282baa3dbb8e05585f0099137dcec647265cb36d65ff9e9c0fb7e5da61bd3322a036de6b4676655ce1eb2c3791d1  mozconfig
+a4c2dd0c2a4df735174a472e20a5cafba9ab0b298177e437ced2afcac79cdc8c1395855b4f5c5987f16eb7ca92acd0370600a0e05ba7a983302fa54cdcf76cf0  bugzilla-1274732.patch
+87b1120700aca026bb4b8968ae661f946050a7357bc3960746b00268e252aa775a6d2e4d4f2b83fe402c8b42a39565de721990198b28d618a778a15219629d5b  disable-hunspell_hooks.patch
+2a967e4619fd89a046bd40be7fdcef646fcb1eba5e47afc96aa1d59c25bcc8747cb07baee6c11f3b803db0981aced181534b806778e4d21e74958f5f4d74c784  fix-fortify-system-wrappers.patch
+ed0d344c66fc8e1cc83a11e9858b32c42e841cbeedd9eb9438811e9fcc3593dc824a8336d00058d55836cedc970aeadd6a82c6dcd7bc0fb746e564d8b478cc6c  fix-arm-atomics-grsec.patch
+fbe9e98ddc7fe2b3f74adc3b7e4fbaaad46fd38c8d073b27492d5f6dc00b7901363a27cd3cea8576485d5255c2a7aa9dbcfcf408df534ebf0ac4c3a10a376cc9  fix-arm-version-detect.patch
+eb2b343dc3ce22e2a06c7bd1d342ad7af28abe95b7d2d16fd5f335ca9867dd6f5713c224d0a0c5064960d425c6c2e9af567cd0d16fab7078aeb39acc37abd434  mozalloc-cstdlib.patch
+e2835cb06d165198c22ed2e3e9832cc978550f9262c456f5e9e3d04db83cd938e3d06fdeb75a76c7787ae1200401d04b6cb4c52dd791af6094c3c718f93a56b8  mozilla-build-arm.patch
+e1db5137d2a1ca6e110b0f424b48b9438c2eaa3d126fe45ecf1e39fc333e137e52fd992505e1a6ad682bc8826181cb52f695ea9434361006c938c44a6f247a3e  musl-basic.patch
+7dd7352692c19db8ce974440bfdf3fee74626d30d3782c9b255c99dbf2b4893607edc19001b5b38e9d38a9cd7985298cd37ab38493c98881223701c616881d78  fix-lcrmf.patch
+57a78b2822db25ac0f3db44a401a2f7fb29ced83f037ffbdbd3488e42edd4eb89d75d917c10344432c2505f85f8d86921fd5015b1854ecd7d270fd778d73acef  x86-musl-fix.patch
+4bb25a58a4087b2abdc17f1ef107bc639e320e49bf80ed567cb45ff0a4f81cc37c215d9619b612ac5a595cf8463426a14a43de6d52a02f1b2282651b58c40bc0  rhbz-966424.patch
+539616b22b93257481e7254fd1f255775aec0bbed2d7751ad1c09647b23e10883943f7a9ed369c15ef97d92b952eb6fbbec887156c6dd29f79d5a6f3f8f360e8  fix-null-in-coded-stream.patch
+ef751e3d99748edb3da7a5eb0fba509682d23401b311b5b503f33a402c25af48e6469972dff5cd58ea3c2d7eda82d4358e3f8ed2387242507b1b243a4d223dce  fix-skutilsarm-musl.patch
+738bcc41a98952399770e826cb2294b80f616c28fdaac836b12bcc664fffe77b48b89e4981b8032dc31095e5a15fe1ac8ceb905181e3d16f203ed49df1958530  disable-ARM-NEON.patch
+"
