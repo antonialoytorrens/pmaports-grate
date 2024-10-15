@@ -16,7 +16,7 @@ makedepends="unzip zip coreutils python2 yasm autoconf2.13 alsa-lib-dev
 	sqlite-dev hunspell-dev g++6 gcc6
 	"
 install="$pkgname.post-install"
-source="$pkgname-$pkgver.tar.gz
+source="$pkgname-$pkgver.tar.gz::https://repo.palemoon.org/MoonchildProductions/Pale-Moon/archive/$pkgver_Release.tar.gz
 	mozconfig
 	bugzilla-1274732.patch
 	disable-hunspell_hooks.patch
